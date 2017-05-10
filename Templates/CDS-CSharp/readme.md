@@ -39,9 +39,9 @@ After acquiring an environment that contains a database, you can use that enviro
 
 To give your Azure Function access to the Common Data Service, you need to register a **Web app / API** applications in **Azure Active Directory**. This allows you to establish an identity for your applications and specify the permission level it needs to access the APIs. You will also need to register the applications calling the Azure function. In this guide, we will use a simple console application to call into the Azure function, for this step we will require a **Native application** registration. Later, as an advanced steps, we will configure a PowerApps Custom API to call the Function, which will require registering another **Web app / API**. All these apps will have to be configured in Azure AD with the correct **Required permissions** and **known client applications**, for the end-to-end flow to work correctly.
 
-Azure AD uses two sets of terminologies betweem the Azure portal and its .NET/Web APIs, when referring to its graph artifacts and properties. The table below provides a mapping of these terminologies. In this guide, we will use the .NET/Web API version of the terminology.
+Azure AD uses two sets of terminologies between the Azure portal and its .NET/Web APIs, when referring to its graph artifacts and properties, as shown in the table below. This guide will by default use the .NET/Web API terminology.
 
-Azure portal | .NET/Web APIs and manifest
+Azure portal terminology | .NET/Web APIs and manifest terminology
 -------------|-----------
 Directory ID | Tenant ID
 Application ID | Application ID
