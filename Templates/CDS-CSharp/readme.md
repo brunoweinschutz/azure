@@ -13,7 +13,7 @@ There are four key steps:
 
 1. **Database acquisition**. The Common Data Service is currently only available through **PowerApps**. You need to get access to a PowerApps environment and ensure it contains a database. This allows you to configure the SDK to access that database.
 1. **Application registration**. To give your Azure function access to the Common Data Service, you need to register a few applications in **Azure Active Directory**. This allows you to establish an identity for your applications and specify the permission levels they needs in order to access the APIs.
-1. **Azure Function creation, configuration and programming**. You can create and configure your [Azure Functions](https://azure.microsoft.com/en-us/services/functions/) from the web portal. There you will be able to use the appropriate Functions template, and configure the Common Data Service SDK's NuGet references, authentication, and target environment.
+1. **Azure Function creation, configuration and programming**. You can create and configure your [Azure Functions](https://azure.microsoft.com/en-us/services/functions/) from the web portal. There you will be able to use the appropriate Functions template, to configure  authentication and target environment.
 1. **Console client application creation and configuration**. You can then run and debug your Azure Function by running the client console app and making HTTP calls to the Function. 
 
 In addition, you can use this function from a PowerApps application. There are two key steps:
@@ -38,6 +38,16 @@ After acquiring an environment that contains a database, you can use that enviro
 # Application registration
 
 To give your Azure Function access to the Common Data Service, you need to register a **Web app / API** applications in **Azure Active Directory**. This allows you to establish an identity for your applications and specify the permission level it needs to access the APIs. You will also need to register the applications calling the Azure function. In this guide, we will use a simple console application to call into the Azure function, for this step we will require a **Native application** registration. Later, as an advanced steps, we will configure a PowerApps Custom API to call the Function, which will require registering another **Web app / API**. All these apps will have to be configured in Azure AD with the correct **Required permissions** and **known client applications**, for the end-to-end flow to work correctly.
+
+Azure AD uses two sets of terminologies betweem the Azure portal and its .NET/Web APIs, when referring to its graph artifacts and properties. The table below provides a mapping of these terminologies. In this guide, we will use the .NET/Web API version of the terminology.
+
+Azure portal | .NET/Web APIs and manifest
+-------------|-----------
+Directory ID | Tenant ID
+Application ID | Application ID
+Application key | Application secret
+Application ID URI | Application resrouce ID
+N/A | Known client application
 
 ## Prerequisites
 
@@ -73,10 +83,12 @@ Follow these steps to register and configure your Azure Function in Azure AD:
     1. Check all entries under **Delegated permissions**, then click **Select**.
     1. Click on **Done** to finalize setting up permissions for this service.
     1. Repeat the 3 steps above for **Windows Azure Service Management API**.
-1. Get the Function application's resource ID:
-    1. Open the application's JSON manifest directly, by clicking on **Manifest** on top of the registered app pane.
-    1. Record the config value **AAD function resource ID** from any entry under `identifierUris`. Following is an example: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3a52`.
-1.  **Note** - Configuring **known client applications** must be performed after registering the other application(s). The step is needed for seamless propagation of required permissions to clients. After completing all registrations go to section **Add known applications to Azure Function app**.
+1. Get the Function application's ID URI:
+    1. Click on **Properties** to open a new pane.
+    1. Copy the value from **App ID URI** and record as the config value **AAD function application ID URI**. This value will look like the following: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3123`.
+1.  Wait until after you configure the other client apps, then go to section **Add known applications to Azure Function app**.
+
+    **Note** - We will need to link back the client application to this application. Configuring **known client applications** must be performed after registering the other client application(s) since we will need their **application ID**s. Skipping this step will prevent the end-to-end sceario from working, because required permissions will not be propogated to the client(s). 
 
 ## Client application registration
 
@@ -131,9 +143,9 @@ You can skip these steps if you are not planning to use the Azure Function from 
 
 ## Add known applications to Azure Function app
 
-For seamless propagation of required permissions to clients, setup **known client applications**. This means that the first time a user logs into a client application, they will be asked to provide all required permissions needed to run this flow. If you skip this step, you may have to manually authorize the use of the Common Data Service for each user.
+For seamless propagation of required permissions to clients, setup **known client applications**. This means that the first time a user logs into a client application, they will be asked to provide all required permissions needed to run this flow. This includes permissions to the **Common Data Service**.
    
-1. Go back to **Azure Active Directory** then click on **App registrations**. 
+1. Go back to **Azure Active Directory** then click on **App registrations**.
 1. Open the registered app:
     1. Search for your Azure Function web app created in previous step.
     1. Click on it after finding it in the list of applications.
@@ -179,20 +191,24 @@ Assuming you already have an Azure subscription set up, [create and open a new f
 
 Create a and configure a new Azure function using templates:
 1. Click on **New Function** under Functions from the left pane.
+1. Select **Custom function** for detailed set of choices.
+1. Click on the **Scenario** dropdown and select **Experimental**.
 1. Select **CDS-CSharp** from the list of templates.
-1. Configure **Authentication / Authorization** based on Azure Active Directory for the function.
-    1. Click on the warning link to **Configure App Service Authentication / Authorization**.
+1. Change the **Autohrization level** to **Anonymous** to disable Function Keys, since we will configure authentication with Azure AD in the next step. 
+
+    **Note** that having both authentication modes active will prevent the function from working, so plese make sure Function keys is disabled. This can also disabled by changing **Autohrization level** to **Anonymous** under the **Integrate** section.
+
+1. Click on the warning link to **Configure App Service Authentication / Authorization** for the function based on Azure Active Directory.
     1. Turn on **App Service Authentication**.
     1. Select **Login with Azure Active Directory** under **Action to take when request is not authorized**.
     1. Configure Azure Active Directory under **Authentication Providers**.
         1. Click on **Azure Active Directory** to configure it.
         1. Select **Advanced** under **Management mode**.
         1. Enter the **AAD function application ID** value from previous steps under **Client ID**.
-        1. Enter the **AAD function application resource URI** value from previous stesps under **Issuer Url**.
+        1. Enter the **AAD function application resource URI** value from previous stesps under **Allowed Token Audiences**.
         1. Enter the **AAD function application secret** value from previous steps under **Client secret**.
         1. Click **OK**
     1. Click **Save** to finalize **Authentication / Authorization**.
-1. Change the **Autohrization level** to **Anonymous** to disable Function Keys, since we already configured authentication with Azure AD. Without this step, the function will not work.
 1. Name the new Function **UpdateProjectCategory**, and click **Create**.
 1. **Note** the sample code window opens under the header section marked with an **'f'** symbol.
 1. Record the configuration value **Function URL** for upcoming steps by clicking on **Get function URL** on the top right, and clicking copy.
@@ -256,11 +272,11 @@ using System.Threading.Tasks;
 In **Program.cs**, copy the following code to replace the contents of **`Program`** class.
 
 ```cs
-        public const string TenantNameOrId = "[[Replace with AAD tenant value]]";
+        public const string TenantNameOrId = "common";
         public const string ClientAppId = "[[Replace with AAD client application ID value]]";
         public const string RedirectUri = "[[Replace with AAD client redirect URI value]]";
-        public const string AzureHostedResetUriString = "[[Replace with Function URL value]]"; // Azure hosted Function URI
-        public const string FunctionResourceId = "[[Replace with AAD function resource ID value]]";
+        public const string AzureHostedUriString = "[[Replace with Function URL value]]"; // Azure hosted Function URI
+        public const string FunctionResourceId = "[[Replace with AAD function ID URI value]]";
 
         public static string Authority { get { return string.Format(AuthorityTemplate, TenantNameOrId); } }
         private const string AuthorityTemplate = "https://login.windows.net/{0}";
@@ -278,7 +294,7 @@ In **Program.cs**, copy the following code to replace the contents of **`Program
         {
             // Get HTTP client and send request
             var client = await GetHttpClientAsync();
-            var updateUriString = $"{AzureHostedResetUriString}";
+            var updateUriString = $"{AzureHostedUriString}";
             var response = await client.PostAsJsonAsync(updateUriString, "Surface");
             Console.WriteLine($"Status: '{response.StatusCode}'");
             Console.WriteLine($"Contents: {await response.Content.ReadAsStringAsync()}");
@@ -296,8 +312,8 @@ In **Program.cs**, copy the following code to replace the contents of **`Program
 
             // Create and configure the HTTP client
             var client = new HttpClient();
-            var authorizationHeaderParameter = securityTokenString.Replace(AuthorizationHeaderScheme + " ", string.Empty);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(AuthorizationHeaderScheme, authorizationHeaderParameter);
+            var authorizationHeaderParameters = securityTokenString.Split(' ');
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(AuthorizationHeaderScheme, authorizationHeaderParameters[1]);
             return client;
         }
 ```
@@ -308,7 +324,9 @@ Configure the target environment and security setting of the app by replacing th
 1. **AAD client application ID** should replace `[[Replace with AAD client application ID value]]`.
 1. **AAD client application redirect URI** should replace `[[Replace with AAD client redirect URI value]]`.
 1. **Function URL** should replace `[[Replace with Function URL value]]`.
-1. **AAD function resource ID** should replace `[[Replace with AAD function resource ID value]]`. **Note** that this **Resource ID** value comes from the **Function application** not the **custom API application**, and will look like the following example: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3abc`.
+1. **AAD function application ID URI** should replace `[[Replace with AAD function ID URI value]]`. 
+
+    **Note** that this **Application ID URI** value comes from the **Function application** not the **custom API application**, and will look like the following example: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3abc`.
 
 ### Compile and run the project
 
@@ -322,7 +340,7 @@ Configure the target environment and security setting of the app by replacing th
 # Advanced - PowerApps Custom API creation and configuration
 In order to call the Azure Function from an app, it first needs to be wrapped by a Custom API that defines its API structure and authentication settings.
 
-Prepare the [swagger](http://swagger.io/) file that defines your function by copying the content below to a .json file and modifying the **host** value. You can get these values by going to the Azure Function edit page and clicking on **Copy function URL** on the top right.
+Prepare the [swagger](http://swagger.io/) file that defines your function by copying the content below to a `productcategory.json` file and modifying the **host** value. You can get these values by going to the Azure Function edit page and clicking on **Copy function URL** on the top right.
 
 ```javascript
 {
@@ -359,16 +377,13 @@ Prepare the [swagger](http://swagger.io/) file that defines your function by cop
       }
     }
   },
-  "definitions": {
-  },
+  "definitions": {},
   "securityDefinitions": {
     "oauth2": {
       "type": "oauth2",
       "flow": "implicit",
       "authorizationUrl": "https://login.windows.net/common/oauth2/authorize",
-      "scopes": {
-        
-      }
+      "scopes": {}
     }
   }
 }
@@ -377,19 +392,21 @@ Prepare the [swagger](http://swagger.io/) file that defines your function by cop
 Now you can create a cusom API to match the Azure Function from previous step.
 
 1. Go to the **Connections** tab in the [PowerApps](https://powerapps.microsoft.com) portal.
-1. Click on **New connection**, select the **Custom** tab on top, then click on **New custom API**.
-1. Select **Swagger API definition**, click on **Upload**, and select the .json file created in the previous step.
-1. Set the name to **ProductCategory**, and click on **Next**. 
-1. Under **Authentication type** select **Azure Active Directory**.
+1. Click on **manage custom connectors**, then click on **Create custom connector**.
+1. Select **Upload an OpenAPI file**, click on **Upload**, and select the `productcategory.json` file created in the previous step.
+1. Confirm the name **ProductCategory** on top header, and click on **Continue**. 
+1. Confirm **Authentication type** is set to **OAuth 2.0**, and **Identitiy provider** is set to **Azure Active Directory**.
 1. Set **Client id** to the **AAD custom API application ID**.
 1. Set **Client secret** to the **AAD custom API application secret**.
-1. Set **Resource URL** to the **AAD function resource ID**. **Note** that this **Resource ID** value comes from the **Function application** not the **custom API application**, and will look like the following example: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3abc`.
-1. Click **Create**, and verify that the new Custom API is added to the list.
+1. Set **Resource URL** to the **AAD function application ID URI**. 
 
-Create a connection for the Custom API as follows:
-1. On the newly created Custom API, click on the **'+'** action button.
-1. Click on **Create**, then login with your credentials.
-1. You should see an authorization page asking you to **Accept** terms of the app to accessing CDS on your behalf. 
+    **Note** that this **Application ID URI** value comes from the **Function application** not the **custom API application**, and will look like the following example: `https://[your_domain_name]/4598e084-55a7-4d57-88ae-59902d8e3abc`.
+1. Click **Continue**, to move to the **Definition** step.
+1. Update any required text fields and click **Create connection** on the header section.
+1. Go to the **Test** section of the wizard by clicking on **test** in the header section.
+1. Click on **New connection** there to create a connection and authenticate.
+    1. Click **Create**, then login with your credentials.
+    1. You should see an authorization page asking you to **Accept** terms of the app, including permissions to access CDS on your behalf. 
 
 # Advanced - PowerApps app building and testing 
 The created custom API can be used to call the Azure Function from an app. You can create the app and configure a button control to connect with the custom API inside PowerApps Studio. Then you can also test calling the function from PowerApps Player. 
@@ -402,10 +419,12 @@ The created custom API can be used to call the Azure Function from an app. You c
     1. Go to **Content** tab and click on **Data sources**.
     1. Click on **Add data source**, and select the **ProductCategory** connector.
 1. Wire the button to call the custom API.
-    1. On the **BrowseScreen** select the **BrowseGallery** and add a **Button** control and name it **Update**.
+    1. On the screen named **BrowseScreen** select the gallery named **BrowseGallery** and add a **Button** control and name it **Update**.
+
+        **Note** that the button would have to be added to an item card, and replicate for each record, in order for the next steps to work properly.
     1. Select the button and change **OnSelect** value to `ProductCategory.UpdateProductCategory(ThisItem.Name); Refresh('Product category')`.
 1. Modify one of the fields to show the **Description** field.
-    1. Select one of the fields under **BrowseGaller**
+    1. Select one of the fields under the gallery **BrowseGallery**
     1. Change the **Text** property value to `ThisItem.Description`
 1. Test the changes by running the app.
     1. Press **F5** to preview the app.
